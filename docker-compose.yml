@@ -1,33 +1,53 @@
 services:
-  db:
+  orders-db:
     image: postgres:16
+    profiles:
+      - local
+    env_file: .env
     environment:
-      POSTGRES_DB: ${POSTGRES_DB}
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-orders}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
     ports:
-      - "5432:5432"
+      - "${PGPORT:-5432}:5432"
     volumes:
       - ./sql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-orders}"]
       interval: 5s
       timeout: 5s
       retries: 10
 
   pipeline:
     build: .
+    profiles:
+      - local
     depends_on:
-      db:
+      orders-db:
         condition: service_healthy
+    env_file: .env
     environment:
-      PGHOST: db
+      PGHOST: orders-db
       PGPORT: 5432
-      PGDATABASE: ${POSTGRES_DB}
-      PGUSER: ${POSTGRES_USER}
-      PGPASSWORD: ${POSTGRES_PASSWORD}
-      DATA_FILE: /app/data/orders.csv
+      PGDATABASE: ${POSTGRES_DB:-orders}
+      PGUSER: ${POSTGRES_USER:-postgres}
+      PGPASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      DATA_DIR: /app/data
+
+  # Pipeline only - for external database
+  pipeline-external:
+    build: .
+    profiles:
+      - external
+    env_file: .env
+    environment:
+      PGHOST: ${PGHOST:-localhost}
+      PGPORT: ${PGPORT:-5432}
+      PGDATABASE: ${POSTGRES_DB:-orders}
+      PGUSER: ${POSTGRES_USER:-postgres}
+      PGPASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      DATA_DIR: /app/data
 
 volumes:
   postgres_data:

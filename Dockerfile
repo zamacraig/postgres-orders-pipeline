@@ -12,4 +12,4 @@ COPY data/      ./data/
 
 WORKDIR /app/pipeline
 
-CMD ["python", "main.py"]
+CMD ["python", "etl.py"]
