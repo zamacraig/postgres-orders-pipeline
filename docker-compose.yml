@@ -34,6 +34,9 @@ services:
       PGUSER: ${POSTGRES_USER:-postgres}
       PGPASSWORD: ${POSTGRES_PASSWORD:-postgres}
       DATA_DIR: /app/data
+    volumes:
+      - ./reports:/app/reports
+      - ./Report.md:/app/Report.md
 
   # Pipeline only - for external database
   pipeline-external:
@@ -48,6 +51,9 @@ services:
       PGUSER: ${POSTGRES_USER:-postgres}
       PGPASSWORD: ${POSTGRES_PASSWORD:-postgres}
       DATA_DIR: /app/data
+    volumes:
+      - ./reports:/app/reports
+      - ./Report.md:/app/Report.md
 
 volumes:
   postgres_data:

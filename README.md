@@ -97,7 +97,54 @@ psql -h $PGHOST -U $PGUSER -d $PGDATABASE -f sql/init.sql
 python pipeline/etl.py
 ```
 
+5. **Generate the report** (optional):
+
+```bash
+python pipeline/report.py
+```
+
+This creates `Report.md` with charts in `reports/`.
+
+## Generating Reports
+
+After running the ETL pipeline, generate visualizations:
+
+### With Docker
+
+```bash
+docker compose --profile local run --rm pipeline python report.py
+```
+
+### With Python
+
+```bash
+python pipeline/report.py
+```
+
+This creates:
+- `Report.md` - Markdown report with embedded charts
+- `reports/` - PNG chart images
+  - `daily_metrics.png` - Revenue and order trends
+  - `top_customers.png` - Top customers by spend
+  - `top_skus.png` - Top SKUs by revenue
+  - `rejection_summary.png` - Data quality issues
+
 ## Testing the Pipeline (Docker Version)
+
+### Full Test (ETL + Report)
+
+Run everything in one go:
+
+```bash
+docker compose down -v                                              # Clean slate
+docker compose --profile local up --build                           # Run ETL
+docker compose --profile local run --rm pipeline python report.py   # Generate report
+```
+
+This creates:
+- Database with loaded data (4 customers, 6 orders, 7 items)
+- `Report.md` with analytics and data quality tables
+- `reports/*.png` chart images
 
 ### 1. Run the full pipeline
 
@@ -179,24 +226,36 @@ SELECT * FROM v_dq_rejection_summary;
 Run the pipeline twice — results should be identical:
 
 ```bash
-docker compose up pipeline       # Run again
-docker compose up pipeline       # And again
+docker compose --profile local up pipeline    # Run again
+docker compose --profile local up pipeline    # And again
 ```
 
 Query counts remain the same (TRUNCATE + COPY ensures full refresh).
+
+### 6. Generate report
+
+```bash
+docker compose --profile local run --rm pipeline python report.py
+```
+
+Open `Report.md` to see analytics charts and data quality tables.
 
 ## Project Structure
 
 ```
 ├── docker-compose.yml    # PostgreSQL + pipeline services
 ├── Dockerfile            # Python 3.12 image for pipeline
-├── requirements.txt      # pandas, psycopg[binary]
+├── requirements.txt      # pandas, psycopg, matplotlib, tabulate
+├── .env.example          # Environment variables template
+├── Report.md             # Generated analytics report
 ├── data/
 │   ├── customers.csv     # Test data with intentional errors
 │   ├── orders.jsonl      # JSONL format orders
 │   └── order_items.csv   # Order line items
 ├── pipeline/
-│   └── etl.py            # Consolidated ETL pipeline
+│   ├── etl.py            # ETL pipeline (ingest, transform, load)
+│   └── report.py         # Report generator with charts
+├── reports/              # Generated chart images
 ├── sql/
 │   └── init.sql          # Schema, rejection tables, views
 └── solution.md           # Design decisions documentation
