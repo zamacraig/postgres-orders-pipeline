@@ -1,4 +1,4 @@
-"""Generate Report.md with visualizations from database views."""
+﻿"""Generate Report.md with visualizations from database views."""
 
 import os
 import warnings
@@ -16,7 +16,7 @@ REPORT_FILE = Path(__file__).parent.parent / "Report.md"
 
 VIEWS = {
     "analytics": ["v_daily_metrics", "v_top_customers_by_spend", "v_top_skus"],
-    "data_quality": ["v_dq_rejection_summary", "v_dq_duplicate_emails", "v_dq_orphan_orders", 
+    "data_quality": ["v_dq_rejection_summary", "v_dq_duplicate_emails", "v_dq_orphan_orders",
                      "v_dq_invalid_order_items", "v_dq_invalid_status"],
 }
 
