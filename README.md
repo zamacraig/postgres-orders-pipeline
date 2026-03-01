@@ -55,7 +55,49 @@ psql -h $PGHOST -U $POSTGRES_USER -d $POSTGRES_DB -f sql/init.sql
 docker compose --profile external up --build
 ```
 
-## Testing the Pipeline
+### Option 3: Local Python (no Docker)
+
+Run the pipeline directly with Python:
+
+1. **Install dependencies:**
+
+```bash
+pip install -r requirements.txt
+```
+
+2. **Set environment variables:**
+
+```bash
+# Linux/macOS
+export PGHOST=localhost
+export PGPORT=5432
+export PGDATABASE=orders
+export PGUSER=postgres
+export PGPASSWORD=postgres
+export DATA_DIR=./data
+
+# Windows PowerShell
+$env:PGHOST="localhost"
+$env:PGPORT="5432"
+$env:PGDATABASE="orders"
+$env:PGUSER="postgres"
+$env:PGPASSWORD="postgres"
+$env:DATA_DIR="./data"
+```
+
+3. **Initialize the schema** (if not already done):
+
+```bash
+psql -h $PGHOST -U $PGUSER -d $PGDATABASE -f sql/init.sql
+```
+
+4. **Run the ETL pipeline:**
+
+```bash
+python pipeline/etl.py
+```
+
+## Testing the Pipeline (Docker Version)
 
 ### 1. Run the full pipeline
 
