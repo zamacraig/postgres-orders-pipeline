@@ -155,7 +155,7 @@ def run():
     # Ingest
     with log_step("Ingest"):
         customers_raw = pd.read_csv(f"{DATA_DIR}/customers.csv")
-        orders_raw = pd.read_json(f"{DATA_DIR}/orders.jsonl", lines=True)
+        orders_raw = pd.read_json(f"{DATA_DIR}/orders.json", lines=True)
         order_items_raw = pd.read_csv(f"{DATA_DIR}/order_items.csv")
         print(f"  Read {len(customers_raw)} customers, {len(orders_raw)} orders, {len(order_items_raw)} items")
     
