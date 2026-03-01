@@ -155,21 +155,20 @@ docker compose --profile local up --build    # Build and run
 
 Expected output:
 ```
-pipeline-1  | ETL Pipeline Started
-pipeline-1  | [Ingest] Starting...
-pipeline-1  |   Read 6 customers, 10 orders, 12 items
-pipeline-1  | [Ingest] Done (0.02s)
-pipeline-1  | [Transform] Starting...
-pipeline-1  |   Valid: 4 customers, 6 orders, 7 items
-pipeline-1  |   Rejected: 2 customers, 4 orders, 6 items
-pipeline-1  | [Transform] Done (0.08s)
-pipeline-1  | [Load] Starting...
-pipeline-1  |   Loaded 4 rows into customers
-pipeline-1  |   Loaded 6 rows into orders
-pipeline-1  |   Loaded 7 rows into order_items
-pipeline-1  |   Logged 12 rejected rows
-pipeline-1  | [Load] Done (0.35s)
-pipeline-1  | ETL Complete in 0.45s
+pipeline-1  | 2026-03-01 18:30:00 | ETL Pipeline Started
+pipeline-1  | 2026-03-01 18:30:00 | [Ingest] Starting...
+pipeline-1  | 2026-03-01 18:30:00 |   Read 6 customers, 10 orders, 12 items
+pipeline-1  | 2026-03-01 18:30:00 | [Ingest] Done (0.02s)
+pipeline-1  | 2026-03-01 18:30:00 | [Transform] Starting...
+pipeline-1  | 2026-03-01 18:30:00 |   Valid: 4 customers, 6 orders, 7 items
+pipeline-1  | 2026-03-01 18:30:00 |   Rejected: 2 customers, 4 orders, 6 items
+pipeline-1  | 2026-03-01 18:30:00 | [Transform] Done (0.08s)
+pipeline-1  | 2026-03-01 18:30:00 | [Load] Starting...
+pipeline-1  | 2026-03-01 18:30:00 |   Loaded 4 rows into customers
+pipeline-1  | 2026-03-01 18:30:00 |   Loaded 6 orders, 7 order_items
+pipeline-1  | 2026-03-01 18:30:00 |   Logged 12 rejected rows
+pipeline-1  | 2026-03-01 18:30:00 | [Load] Done (0.35s)
+pipeline-1  | 2026-03-01 18:30:00 | ETL Complete in 0.45s
 pipeline-1 exited with code 0
 ```
 
@@ -250,7 +249,7 @@ Open `Report.md` to see analytics charts and data quality tables.
 ├── Report.md             # Generated analytics report
 ├── data/
 │   ├── customers.csv     # Test data with intentional errors
-│   ├── orders.jsonl      # JSONL format orders
+│   ├── orders.json       # JSON Lines format orders
 │   └── order_items.csv   # Order line items
 ├── pipeline/
 │   ├── etl.py            # ETL pipeline (ingest, transform, load)
@@ -292,3 +291,20 @@ cp .env.example .env
 | `PGHOST` | PostgreSQL host (external mode) | `localhost` |
 | `PGPORT` | PostgreSQL port | `5432` |
 | `DATA_DIR` | Path to data files (set by Docker) | `/app/data` |
+
+## Error Handling
+
+The pipeline handles errors gracefully:
+
+| Error | Behavior | Exit Code |
+|-------|----------|:---------:|
+| Missing data file | Logs filename, exits | 1 |
+| Database connection failure | Logs error, exits | 1 |
+| Invalid data types | Converts to default, rejects row | 0 |
+| Validation failures | Quarantines to rejection tables | 0 |
+| Success | Commits transaction | 0 |
+
+All logs include timestamps for debugging:
+```
+2026-03-01 18:30:00 | ERROR: File not found - customers.csv
+```

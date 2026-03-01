@@ -2,14 +2,21 @@
 
 import os
 import re
+import sys
 import time
 from contextlib import contextmanager
+from datetime import datetime
 from io import StringIO
 import pandas as pd
 import psycopg
 
 DATA_DIR = os.environ.get("DATA_DIR")
 VALID_STATUSES = {"placed", "shipped", "cancelled", "refunded"}
+
+
+def log(msg):
+    """Print message with timestamp."""
+    print(f"{datetime.now():%Y-%m-%d %H:%M:%S} | {msg}")
 
 
 def is_valid_email(email):
@@ -20,11 +27,11 @@ def is_valid_email(email):
 @contextmanager
 def log_step(name):
     """Context manager to log step start/end with duration."""
-    print(f"[{name}] Starting...")
+    log(f"[{name}] Starting...")
     start = time.perf_counter()
     yield
     elapsed = time.perf_counter() - start
-    print(f"[{name}] Done ({elapsed:.2f}s)")
+    log(f"[{name}] Done ({elapsed:.2f}s)")
 
 
 def get_connection():
@@ -93,9 +100,9 @@ def transform(customers_df, orders_df, order_items_df):
     
     # === ORDER ITEMS ===
     items = order_items_df.copy()
-    items["quantity"] = items["quantity"].astype(int)
-    items["unit_price"] = items["unit_price"].astype(float).round(2)
-    items["sku"] = items["sku"].str.strip()
+    items["quantity"] = pd.to_numeric(items["quantity"], errors="coerce").fillna(0).astype(int)
+    items["unit_price"] = pd.to_numeric(items["unit_price"], errors="coerce").fillna(-1).round(2)
+    items["sku"] = items["sku"].astype(str).str.strip()
     items["category"] = items["category"].str.strip().replace("", None)
     
     # Validate order items
@@ -130,7 +137,7 @@ def load_table(conn, table, columns, df):
             buf.seek(0)
             with cur.copy(f"COPY {table} ({', '.join(columns)}) FROM STDIN WITH CSV NULL '\\N'") as copy:
                 copy.write(buf.read())
-    print(f"  Loaded {len(df)} rows into {table}")
+    log(f"  Loaded {len(df)} rows into {table}")
 
 
 def load_rejected(conn, table, columns, df):
@@ -149,40 +156,51 @@ def load_rejected(conn, table, columns, df):
 # --- Main ---
 
 def run():
-    print("ETL Pipeline Started\n")
+    log("ETL Pipeline Started")
     start = time.perf_counter()
     
-    # Ingest
-    with log_step("Ingest"):
-        customers_raw = pd.read_csv(f"{DATA_DIR}/customers.csv")
-        orders_raw = pd.read_json(f"{DATA_DIR}/orders.json", lines=True)
-        order_items_raw = pd.read_csv(f"{DATA_DIR}/order_items.csv")
-        print(f"  Read {len(customers_raw)} customers, {len(orders_raw)} orders, {len(order_items_raw)} items")
+    try:
+        # Ingest
+        with log_step("Ingest"):
+            customers_raw = pd.read_csv(f"{DATA_DIR}/customers.csv")
+            orders_raw = pd.read_json(f"{DATA_DIR}/orders.json", lines=True)
+            order_items_raw = pd.read_csv(f"{DATA_DIR}/order_items.csv")
+            log(f"  Read {len(customers_raw)} customers, {len(orders_raw)} orders, {len(order_items_raw)} items")
+        
+        # Transform & Validate
+        with log_step("Transform"):
+            customers, orders, order_items, rej_cust, rej_ord, rej_items = transform(customers_raw, orders_raw, order_items_raw)
+            log(f"  Valid: {len(customers)} customers, {len(orders)} orders, {len(order_items)} items")
+            log(f"  Rejected: {len(rej_cust)} customers, {len(rej_ord)} orders, {len(rej_items)} items")
+        
+        # Load
+        with log_step("Load"):
+            with get_connection() as conn:
+                load_table(conn, "customers", ["customer_id", "email", "full_name", "signup_date", "country_code", "is_active"], customers)
+                load_table(conn, "orders", ["order_id", "customer_id", "order_ts", "status", "total_amount", "currency"], orders)
+                load_table(conn, "order_items", ["order_id", "line_no", "sku", "quantity", "unit_price", "category"], order_items)
+                
+                rej_count = 0
+                rej_count += load_rejected(conn, "rejected_customers", ["reason", "customer_id", "email", "full_name", "signup_date", "country_code", "is_active"], rej_cust)
+                rej_count += load_rejected(conn, "rejected_orders", ["reason", "order_id", "customer_id", "order_ts", "status", "total_amount", "currency"], rej_ord)
+                rej_count += load_rejected(conn, "rejected_order_items", ["reason", "order_id", "line_no", "sku", "quantity", "unit_price", "category"], rej_items)
+                log(f"  Logged {rej_count} rejected rows")
+                conn.commit()
+        
+        elapsed = time.perf_counter() - start
+        log(f"ETL Complete in {elapsed:.2f}s")
+        return 0
     
-    # Transform & Validate
-    with log_step("Transform"):
-        customers, orders, order_items, rej_cust, rej_ord, rej_items = transform(customers_raw, orders_raw, order_items_raw)
-        print(f"  Valid: {len(customers)} customers, {len(orders)} orders, {len(order_items)} items")
-        print(f"  Rejected: {len(rej_cust)} customers, {len(rej_ord)} orders, {len(rej_items)} items")
-    
-    # Load
-    with log_step("Load"):
-        with get_connection() as conn:
-            load_table(conn, "customers", ["customer_id", "email", "full_name", "signup_date", "country_code", "is_active"], customers)
-            load_table(conn, "orders", ["order_id", "customer_id", "order_ts", "status", "total_amount", "currency"], orders)
-            load_table(conn, "order_items", ["order_id", "line_no", "sku", "quantity", "unit_price", "category"], order_items)
-            
-            # Log rejections (appends to history)
-            rej_count = 0
-            rej_count += load_rejected(conn, "rejected_customers", ["reason", "customer_id", "email", "full_name", "signup_date", "country_code", "is_active"], rej_cust)
-            rej_count += load_rejected(conn, "rejected_orders", ["reason", "order_id", "customer_id", "order_ts", "status", "total_amount", "currency"], rej_ord)
-            rej_count += load_rejected(conn, "rejected_order_items", ["reason", "order_id", "line_no", "sku", "quantity", "unit_price", "category"], rej_items)
-            print(f"  Logged {rej_count} rejected rows")
-            conn.commit()
-    
-    elapsed = time.perf_counter() - start
-    print(f"\nETL Complete in {elapsed:.2f}s")
+    except FileNotFoundError as e:
+        log(f"ERROR: File not found - {e.filename}")
+        return 1
+    except psycopg.OperationalError as e:
+        log(f"ERROR: Database connection failed - {e}")
+        return 1
+    except Exception as e:
+        log(f"ERROR: {type(e).__name__} - {e}")
+        return 1
 
 
 if __name__ == "__main__":
-    run()
+    sys.exit(run())
