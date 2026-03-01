@@ -137,7 +137,8 @@ Run everything in one go:
 
 ```bash
 docker compose down -v                                              # Clean slate
-docker compose --profile local up --build                           # Run ETL
+docker compose --profile local up -d orders-db                      # Start database
+docker compose --profile local run --rm pipeline                    # Run ETL
 docker compose --profile local run --rm pipeline python report.py   # Generate report
 ```
 
@@ -149,8 +150,9 @@ This creates:
 ### 1. Run the full pipeline
 
 ```bash
-docker compose down -v                       # Clean slate (removes volumes)
-docker compose --profile local up --build    # Build and run
+docker compose down -v                                   # Clean slate (removes volumes)
+docker compose --profile local up -d orders-db           # Start database in background
+docker compose --profile local run --rm pipeline         # Run ETL (exits when done)
 ```
 
 Expected output:
@@ -225,8 +227,8 @@ SELECT * FROM v_dq_rejection_summary;
 Run the pipeline twice — results should be identical:
 
 ```bash
-docker compose --profile local up pipeline    # Run again
-docker compose --profile local up pipeline    # And again
+docker compose --profile local run --rm pipeline    # Run again
+docker compose --profile local run --rm pipeline    # And again
 ```
 
 Query counts remain the same (TRUNCATE + COPY ensures full refresh).
